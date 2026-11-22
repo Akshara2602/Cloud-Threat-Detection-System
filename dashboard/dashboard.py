@@ -207,6 +207,35 @@ def get_api_data(endpoint):
 
 
 # =====================================================
+# AWS FAILED LOGIN MONITORING
+# =====================================================
+
+def get_failed_login_records():
+    """Read the Lambda failed-login counter table in AWS."""
+    table_name = os.getenv("DYNAMODB_TABLE", "FailedLoginAttempts")
+    region = os.getenv("DYNAMODB_REGION", "us-east-1")
+
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=region)
+        table = dynamodb.Table(table_name)
+
+        records = []
+        response = table.scan()
+        records.extend(response.get("Items", []))
+
+        while response.get("LastEvaluatedKey"):
+            response = table.scan(
+                ExclusiveStartKey=response["LastEvaluatedKey"]
+            )
+            records.extend(response.get("Items", []))
+
+        return records, None
+
+    except Exception as error:
+        return None, str(error)
+
+
+# =====================================================
 # DISPLAY TABLE
 # =====================================================
 
@@ -279,6 +308,7 @@ page = st.sidebar.radio(
         "Threat Analysis",
         "Security Alerts",
         "Event Monitoring",
+        "AWS Brute Force Monitoring",
         "Incident Management",
         "Reports"
     ]
@@ -1014,6 +1044,77 @@ if summary is not None:
     # =================================================
     # 6. SECURITY REPORTS
     # =================================================
+
+    elif page == "AWS Brute Force Monitoring":
+
+        st.header("🛡️ AWS Brute-Force Login Monitoring")
+        st.caption(
+            "Failed AWS console sign-in attempts tracked by Lambda and DynamoDB."
+        )
+
+        if st.button("↻ Refresh AWS login records"):
+            st.rerun()
+
+        records, dynamodb_error = get_failed_login_records()
+
+        if dynamodb_error:
+            st.error(f"Unable to read DynamoDB table: {dynamodb_error}")
+            st.info(
+                "Check that your local AWS credentials are configured and "
+                "that they have dynamodb:Scan permission on FailedLoginAttempts."
+            )
+        elif not records:
+            st.info("No failed-login records are currently stored in DynamoDB.")
+        else:
+            login_df = pd.DataFrame(records)
+
+            # Normalize values for display without changing the DynamoDB records.
+            if "firstAttempt" in login_df.columns:
+                login_df["firstAttempt"] = pd.to_numeric(
+                    login_df["firstAttempt"], errors="coerce"
+                )
+                login_df["First Attempt (UTC)"] = pd.to_datetime(
+                    login_df["firstAttempt"], unit="s", utc=True, errors="coerce"
+                )
+            if "attemptCount" in login_df.columns:
+                login_df["attemptCount"] = pd.to_numeric(
+                    login_df["attemptCount"], errors="coerce"
+                )
+
+            total_sources = len(login_df)
+            total_attempts = int(
+                login_df["attemptCount"].fillna(0).sum()
+            ) if "attemptCount" in login_df.columns else 0
+            threshold_sources = int(
+                (login_df["attemptCount"] >= 5).sum()
+            ) if "attemptCount" in login_df.columns else 0
+
+            metric1, metric2, metric3 = st.columns(3)
+            metric1.metric("Tracked source IPs", total_sources)
+            metric2.metric("Recorded failed attempts", total_attempts)
+            metric3.metric("Sources at threshold (5+)", threshold_sources)
+
+            st.divider()
+            st.subheader("Failed Login Attempts")
+
+            display_columns = [
+                column for column in
+                ["sourceIPAddress", "attemptCount", "First Attempt (UTC)", "firstAttempt"]
+                if column in login_df.columns
+            ]
+            display_table(login_df[display_columns])
+
+            if threshold_sources:
+                st.warning(
+                    f"{threshold_sources} source IP(s) have reached at least "
+                    "five failed attempts. Review these sources."
+                )
+
+            st.caption(
+                "Data is read directly from DynamoDB table FailedLoginAttempts "
+                "in us-east-1. This page does not create or modify AWS records."
+            )
+
 
     elif page == "Reports":
 
