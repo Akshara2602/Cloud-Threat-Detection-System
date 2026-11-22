@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import boto3
 
 from dotenv import load_dotenv
 
@@ -24,6 +25,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+# =====================================================
+# DASHBOARD STARTUP EMAIL (ONCE PER STREAMLIT SESSION)
+# =====================================================
+
+if "startup_email_sent" not in st.session_state:
+    try:
+        sns_topic_arn = os.getenv("SNS_TOPIC_ARN")
+        aws_region = os.getenv("AWS_REGION", "ap-south-1")
+
+        if not sns_topic_arn:
+            st.warning("Startup email not sent: SNS_TOPIC_ARN is missing from .env.")
+        else:
+            sns = boto3.client("sns", region_name=aws_region)
+            sns.publish(
+                TopicArn=sns_topic_arn,
+                Subject="Cloud Threat Detection Dashboard Started",
+                Message=(
+                    "Your Cloud Threat Detection System dashboard "
+                    "has been opened successfully."
+                )
+            )
+            st.session_state["startup_email_sent"] = True
+            st.success("Dashboard startup email sent successfully!")
+
+    except Exception as error:
+        st.error(f"Unable to send dashboard startup email: {error}")
 
 # =====================================================
 # COLOR THEME

@@ -1,0 +1,37 @@
+[33m56dfd1b[m Initial commit - Cloud Threat Detection System
+ .env.example                       |   18 [32m+[m
+ .gitignore                         |   19 [32m+[m
+ aws_integration/lambda_function.py |   85 [32m+++[m
+ backend/app.py                     |   89 [32m+++[m
+ backend/auth.py                    |   42 [32m++[m
+ backend/config.py                  |   29 [32m+[m
+ backend/database.py                |   14 [32m+[m
+ backend/models.py                  |  219 [32m++++++++[m
+ backend/routes/alert_routes.py     |  132 [32m+++++[m
+ backend/routes/auth_routes.py      |  140 [32m+++++[m
+ backend/routes/dashboard_routes.py |   90 [32m+++[m
+ backend/routes/event_routes.py     |  111 [32m++++[m
+ backend/routes/incident_routes.py  |  150 [32m+++++[m
+ backend/routes/raw_event_routes.py |  169 [32m++++++[m
+ backend/services/alert_service.py  |   88 [32m+++[m
+ backend/services/email_service.py  |   78 [32m+++[m
+ dashboard/dashboard.py             | 1060 [32m++++++++++++++++++++++++++++++++++++[m
+ dashboard/incidents.py             |   35 [32m++[m
+ dashboard/reports.py               |   51 [32m++[m
+ database/schema.sql                |  114 [32m++++[m
+ detection_engine/__init__.py       |    0
+ detection_engine/brute_force.py    |   52 [32m++[m
+ detection_engine/classifier.py     |   34 [32m++[m
+ detection_engine/detector.py       |  230 [32m++++++++[m
+ detection_engine/iam_analyzer.py   |   34 [32m++[m
+ detection_engine/ip_analyzer.py    |   53 [32m++[m
+ detection_engine/risk_score.py     |   50 [32m++[m
+ detection_engine/rules.py          |  120 [32m++++[m
+ frontend/static/css/style.css      |   73 [32m+++[m
+ frontend/templates/login.html      |   68 [32m+++[m
+ requirements.txt                   |   20 [32m+[m
+ scripts/generate_demo_events.py    |  208 [32m+++++++[m
+ scripts/test_alert.py              |   48 [32m++[m
+ tests/test_classifier.py           |   48 [32m++[m
+ tests/test_detector.py             |   85 [32m+++[m
+ 35 files changed, 3856 insertions(+)

@@ -4,12 +4,11 @@ import json
 import logging
 import boto3
 
-from botocore.exceptions import (
-    ClientError,
-    BotoCoreError,
-    PartialCredentialsError,
-    NoCredentialsError
-)
+from dotenv import load_dotenv
+from botocore.exceptions import ClientError, BotoCoreError
+
+# Load environment variables from the project .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -22,88 +21,61 @@ class EmailNotificationService:
 
     def send_alert(self, alert):
 
-        # 1. Check SNS topic configuration
+        # Check SNS topic
         if not self.topic_arn:
             return {
                 "success": False,
-                "message": "SNS_TOPIC_ARN is missing or empty"
+                "message": "SNS_TOPIC_ARN is missing from .env"
             }
 
-        # 2. Read AWS credentials
+        # Read AWS credentials
         access_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
-        session_token = os.getenv("AWS_SESSION_TOKEN", "").strip()
-
-        # 3. Validate credentials
-        missing = []
-
-        if not access_key:
-            missing.append("AWS_ACCESS_KEY_ID")
-
-        if not secret_key:
-            missing.append("AWS_SECRET_ACCESS_KEY")
-
-        if missing:
-            return {
-                "success": False,
-                "message": "Missing or empty environment variables: "
-                           + ", ".join(missing)
-            }
 
         try:
-            # 4. Create SNS client only when sending an alert
-            client_options = {
-                "service_name": "sns",
-                "region_name": self.region,
-                "aws_access_key_id": access_key,
-                "aws_secret_access_key": secret_key
-            }
+            # Create AWS SNS client
+            if access_key and secret_key:
+                session = boto3.Session(
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=self.region
+                )
+            else:
+                # Use the standard AWS credential chain
+                session = boto3.Session(region_name=self.region)
 
-            if session_token:
-                client_options["aws_session_token"] = session_token
+            client = session.client("sns")
 
-            client = boto3.client(**client_options)
-
-            # 5. Prepare notification message
+            # Prepare security alert
             message = {
-                "threat_type": alert.get("threat_type"),
-                "description": alert.get("description"),
-                "severity": alert.get("severity"),
-                "risk_score": alert.get("risk_score"),
-                "source_ip": alert.get("source_ip"),
-                "event_name": alert.get("event_name"),
-                "timestamp": alert.get("timestamp")
+                "Threat Type": alert.get("threat_type", "Unknown"),
+                "Description": alert.get("description", "No description"),
+                "Severity": alert.get("severity", "UNKNOWN"),
+                "Risk Score": alert.get("risk_score", 0),
+                "Source IP": alert.get("source_ip", "Unknown"),
+                "Affected Resource": alert.get(
+                    "event_name",
+                    alert.get("affected_resource", "Unknown")
+                ),
+                "Timestamp": alert.get("timestamp", "Unknown")
             }
 
-            # 6. Publish notification to SNS
+            # Publish email notification
             response = client.publish(
                 TopicArn=self.topic_arn,
                 Subject="Cloud Security Alert - " + str(
-                    alert.get("severity", "UNKNOWN")
+                    message["Severity"]
                 ),
                 Message=json.dumps(message, indent=4, default=str)
             )
 
-            logger.info("SNS notification published successfully")
+            logger.info("SNS notification accepted: %s",
+                        response.get("MessageId"))
 
             return {
                 "success": True,
-                "message": "SNS notification published successfully",
+                "message": "SNS accepted the notification",
                 "message_id": response.get("MessageId")
-            }
-
-        except PartialCredentialsError:
-            logger.exception("Incomplete AWS credentials")
-            return {
-                "success": False,
-                "message": "AWS credentials are incomplete"
-            }
-
-        except NoCredentialsError:
-            logger.exception("AWS credentials not found")
-            return {
-                "success": False,
-                "message": "AWS credentials not found"
             }
 
         except ClientError as error:
@@ -111,23 +83,25 @@ class EmailNotificationService:
                 "Error", {}
             ).get("Code", "Unknown")
 
-            logger.exception("SNS service returned an error")
+            logger.exception("SNS publishing failed")
 
             return {
                 "success": False,
-                "message": "SNS error: " + error_code
+                "message": f"SNS error: {error_code}"
             }
 
         except BotoCoreError:
-            logger.exception("AWS SDK error")
+            logger.exception("AWS connection or credential error")
+
             return {
                 "success": False,
-                "message": "AWS SDK connection or configuration error"
+                "message": "AWS credentials or connection error"
             }
 
         except Exception:
-            logger.exception("Unexpected notification error")
+            logger.exception("Unexpected email notification error")
+
             return {
                 "success": False,
-                "message": "Unexpected error while sending SNS notification"
+                "message": "Unexpected notification error"
             }
